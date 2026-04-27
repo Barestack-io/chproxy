@@ -993,6 +993,11 @@ func TestServe(t *testing.T) {
 			*configFile = tc.file
 			s, done := tc.listenFn()
 			defer func() {
+				// Drop any keep-alive connections cached on http.DefaultClient
+				// so the next subtest doesn't reuse a half-dead connection
+				// pointing at the old listener (cause of the flaky EOF in
+				// upstream issue #341).
+				http.DefaultClient.CloseIdleConnections()
 				if err := s.Shutdown(context.Background()); err != nil {
 					t.Fatalf("unexpected error while closing server: %s", err)
 				}
