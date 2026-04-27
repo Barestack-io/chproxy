@@ -1,11 +1,13 @@
 package cache
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"io"
 	"os"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -14,6 +16,61 @@ import (
 
 	"github.com/contentsquare/chproxy/config"
 )
+
+// appendCtxTracker wraps a redis.UniversalClient and, on each Append, snapshots
+// the cancellation state of every previously-seen context. This lets a test
+// observe whether a per-iteration context is cancelled before the next
+// iteration runs.
+type appendCtxTracker struct {
+	redis.UniversalClient
+	mu        sync.Mutex
+	seen      []context.Context
+	snapshots [][]error
+}
+
+func (t *appendCtxTracker) Append(ctx context.Context, key, value string) *redis.IntCmd {
+	t.mu.Lock()
+	snap := make([]error, len(t.seen))
+	for i, c := range t.seen {
+		snap[i] = c.Err()
+	}
+	t.snapshots = append(t.snapshots, snap)
+	t.seen = append(t.seen, ctx)
+	t.mu.Unlock()
+	return t.UniversalClient.Append(ctx, key, value)
+}
+
+func TestRedisCachePutCancelsPerChunkContextBetweenIterations(t *testing.T) {
+	s := miniredis.RunT(t)
+	base := redis.NewUniversalClient(&redis.UniversalOptions{Addrs: []string{s.Addr()}})
+	tracker := &appendCtxTracker{UniversalClient: base}
+	cache := newRedisCache(tracker, redisConf)
+	defer cache.Close()
+
+	// Two 2 MiB chunks → two Append iterations.
+	payloadSize := 4 * 1024 * 1024
+	payload := strings.Repeat("a", payloadSize)
+	key := &Key{Query: []byte("SELECT defer_loop")}
+
+	if _, err := cache.Put(strings.NewReader(payload), ContentMetadata{Length: int64(payloadSize)}, key); err != nil {
+		t.Fatalf("put failed: %s", err)
+	}
+
+	if len(tracker.snapshots) < 2 {
+		t.Fatalf("expected at least 2 Append calls, got %d", len(tracker.snapshots))
+	}
+
+	// At iteration i (i>0), every prior chunk's context must already be
+	// cancelled. The buggy version defers cancel to Put's return, so prior
+	// contexts are still live when later chunks Append.
+	for i := 1; i < len(tracker.snapshots); i++ {
+		for j, prevErr := range tracker.snapshots[i] {
+			if prevErr == nil {
+				t.Errorf("Append iteration %d: prior context from iteration %d not cancelled (defer-in-loop accumulates cancels until Put returns)", i, j)
+			}
+		}
+	}
+}
 
 const cacheTTL = time.Duration(30 * time.Second)
 

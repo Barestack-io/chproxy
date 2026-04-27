@@ -286,9 +286,7 @@ func (r *redisCache) Put(reader io.Reader, contentMetadata ContentMetadata, key 
 		if err != nil && !errors.Is(err, io.EOF) {
 			return 0, err
 		}
-		ctxAppend, cancelFuncAppend := context.WithTimeout(context.Background(), putTimeout)
-		defer cancelFuncAppend()
-		totalByteWritten, err := r.client.Append(ctxAppend, stringKeyTmp, string(buffer[:n])).Result()
+		totalByteWritten, err := r.appendChunk(stringKeyTmp, buffer[:n])
 		if err != nil {
 			// trying to clean redis from this partially inserted item
 			r.clean(stringKeyTmp)
@@ -310,6 +308,14 @@ func (r *redisCache) Put(reader io.Reader, contentMetadata ContentMetadata, key 
 	defer cancelFuncRename()
 	r.client.Rename(ctxRename, stringKeyTmp, stringKey)
 	return r.expire, nil
+}
+
+// appendChunk writes a single chunk and releases its context before returning,
+// so streaming a large payload in Put does not pile up deferred cancels.
+func (r *redisCache) appendChunk(key string, data []byte) (int64, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), putTimeout)
+	defer cancel()
+	return r.client.Append(ctx, key, string(data)).Result()
 }
 
 func (r *redisCache) clean(stringKey string) {
