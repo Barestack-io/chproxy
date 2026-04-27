@@ -11,6 +11,7 @@ import (
 	"net/http/httputil"
 	"net/url"
 	"os"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -606,19 +607,42 @@ func (rp *reverseProxy) completeTransaction(s *scope, statusCode int, userCache 
 	}
 }
 
+// FNV-1a 32-bit constants — matches hash/fnv. Inlined here so the cache-key
+// hot path can hash without allocating an interface-boxed hasher per call.
+const (
+	fnvOffset32 = 2166136261
+	fnvPrime32  = 16777619
+)
+
+func fnvHashString(h uint32, s string) uint32 {
+	for i := 0; i < len(s); i++ {
+		h ^= uint32(s[i])
+		h *= fnvPrime32
+	}
+	return h
+}
+
 func calcQueryParamsHash(origParams url.Values) uint32 {
-	queryParams := make(map[string]string)
+	keys := make([]string, 0, len(origParams))
 	for param := range origParams {
 		if strings.HasPrefix(param, "param_") {
-			queryParams[param] = origParams.Get(param)
+			keys = append(keys, param)
 		}
 	}
-	queryParamsHash, err := calcMapHash(queryParams)
-	if err != nil {
-		log.Errorf("fail to calc hash for params %s; %s", origParams, err)
+	if len(keys) == 0 {
 		return 0
 	}
-	return queryParamsHash
+	sort.Strings(keys)
+	h := uint32(fnvOffset32)
+	for _, k := range keys {
+		h = fnvHashString(h, k)
+		h ^= '='
+		h *= fnvPrime32
+		h = fnvHashString(h, origParams.Get(k))
+		h ^= '&'
+		h *= fnvPrime32
+	}
+	return h
 }
 
 // applyConfig applies the given cfg to reverseProxy.

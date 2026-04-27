@@ -40,6 +40,22 @@ func TestSortHeaders(t *testing.T) {
 	testSortHeaders(t, "deflate, gzip, br", "br,deflate,gzip")
 }
 
+func BenchmarkSortHeader(b *testing.B) {
+	cases := []string{
+		"gzip",
+		"br, gzip, deflate",
+		"deflate, gzip, br, identity, zstd",
+	}
+	for _, h := range cases {
+		b.Run(h, func(b *testing.B) {
+			b.ReportAllocs()
+			for i := 0; i < b.N; i++ {
+				_ = sortHeader(h)
+			}
+		})
+	}
+}
+
 func testSortHeaders(t *testing.T, h, expectedH string) {
 	t.Helper()
 	s := sortHeader(h)
