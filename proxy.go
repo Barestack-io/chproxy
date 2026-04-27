@@ -703,17 +703,22 @@ func (rp *reverseProxy) applyConfig(cfg *config.Config) error {
 	rp.lock.Lock()
 	rp.clusters = clusters
 	rp.users = users
-	if len(cfg.AllowedParams) > 0 {
-		rp.allowedParams = cfg.AllowedParams
-	} else {
-		rp.allowedParams = defaultAllowedParams
-	}
+	rp.allowedParams = resolveAllowedParams(cfg.AllowedParams)
 	// Swap is needed for deferred closing of old caches.
 	// See the code above where new caches are created.
 	caches, rp.caches = rp.caches, caches
 	rp.lock.Unlock()
 
 	return nil
+}
+
+// resolveAllowedParams returns the configured allowed-params list when set,
+// otherwise the built-in defaultAllowedParams baseline.
+func resolveAllowedParams(cfg []string) []string {
+	if len(cfg) > 0 {
+		return cfg
+	}
+	return defaultAllowedParams
 }
 
 func initTempCaches(caches map[string]*cache.AsyncCache, transactionsTimeout config.Duration, cfg []config.Cache) error {
