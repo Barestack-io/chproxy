@@ -14,23 +14,14 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: ContentSquare/actions-checkout@approved-v4
+        uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
       - name: Set up Go
-        uses: ContentSquare/actions-setup-go@approved-v5
+        uses: actions/setup-go@v5
         with:
           go-version-file: go.mod
-
-      - name: Set up Docker Buildx
-        uses: ContentSquare/docker-setup-buildx-action@approved-v3
-
-      - name: Docker login
-        uses: ContentSquare/docker-login-action@approved-v3
-        with:
-          username: ${{ secrets.docker_username }}
-          password: ${{ secrets.docker_password }}
 
       - name: Run GoReleaser
         uses: goreleaser/goreleaser-action@v6
