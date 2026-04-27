@@ -785,6 +785,28 @@ func TestReverseProxy_ServeHTTP1(t *testing.T) {
 			},
 		},
 		{
+			cfg:           wildcardedCfg,
+			name:          "request packet size token limit for wildcarded cluster user",
+			expResponse:   "limits for cluster user \"analyst_jane\" is exceeded: request_packet_size_tokens_burst limit: 4",
+			expStatusCode: http.StatusTooManyRequests,
+			f: func(p *reverseProxy) *http.Response {
+				// Configure the limit on the wildcard *template* cluster user.
+				// Each wildcarded auth deepCopies the template, so the limit
+				// fields must be propagated for the check to apply.
+				tmpl := p.clusters["cluster"].users["analyst_*"]
+				tmpl.reqPacketSizeTokensBurst = 4
+				tmpl.reqPacketSizeTokensRate = 1
+				tmpl.reqPacketSizeTokenLimiter = rate.NewLimiter(rate.Limit(1), 4)
+				// Body length 5 ("200ms") exceeds the burst of 4 in a single
+				// request, so a freshly cloned limiter still rejects it.
+				body := bytes.NewBufferString((time.Millisecond * 200).String())
+				req := httptest.NewRequest("POST", fakeServer.URL, body)
+				req.Header.Set("X-ClickHouse-User", "analyst_jane")
+				req.Header.Set("X-ClickHouse-Key", "jane_pass")
+				return makeCustomRequest(p, req)
+			},
+		},
+		{
 			cfg:           goodCfgWithCacheAndMaxErrorReasonSize,
 			name:          "max error reason size",
 			expResponse:   badGatewayResponse,
