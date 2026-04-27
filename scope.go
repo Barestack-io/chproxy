@@ -674,8 +674,8 @@ type clusterUser struct {
 
 func deepCopy(cu *clusterUser) *clusterUser {
 	var queueCh chan struct{}
-	if cu.maxQueueTime > 0 {
-		queueCh = make(chan struct{}, cu.maxQueueTime)
+	if cap(cu.queueCh) > 0 {
+		queueCh = make(chan struct{}, cap(cu.queueCh))
 	}
 	return &clusterUser{
 		name:                 cu.name,

@@ -478,6 +478,26 @@ func TestGetHostSticky(t *testing.T) {
 	}
 }
 
+func TestDeepCopyClusterUserPreservesQueueCapacity(t *testing.T) {
+	// Mirrors what newClusterUser produces for a YAML config with
+	// max_queue_size: 2 and max_queue_time: 5us.
+	const wantQueueCap = 2
+	original := &clusterUser{
+		name:                 "wildcard-template",
+		maxConcurrentQueries: 5,
+		queueCh:              make(chan struct{}, wantQueueCap),
+		maxQueueTime:         5 * time.Microsecond,
+	}
+
+	cp := deepCopy(original)
+
+	if got := cap(cp.queueCh); got != wantQueueCap {
+		t.Fatalf("deepCopy queueCh capacity = %d, want %d (max_queue_size from source); "+
+			"deepCopy is sizing the channel from maxQueueTime nanoseconds instead of the source queue capacity",
+			got, wantQueueCap)
+	}
+}
+
 func TestIncQueued(t *testing.T) {
 	u := testGetUser()
 	cu := testGetClusterUser()
