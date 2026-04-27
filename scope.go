@@ -678,14 +678,17 @@ func deepCopy(cu *clusterUser) *clusterUser {
 		queueCh = make(chan struct{}, cap(cu.queueCh))
 	}
 	return &clusterUser{
-		name:                 cu.name,
-		password:             cu.password,
-		maxConcurrentQueries: cu.maxConcurrentQueries,
-		maxExecutionTime:     time.Duration(cu.maxExecutionTime),
-		reqPerMin:            cu.reqPerMin,
-		queueCh:              queueCh,
-		maxQueueTime:         time.Duration(cu.maxQueueTime),
-		allowedNetworks:      cu.allowedNetworks,
+		name:                      cu.name,
+		password:                  cu.password,
+		maxConcurrentQueries:      cu.maxConcurrentQueries,
+		maxExecutionTime:          time.Duration(cu.maxExecutionTime),
+		reqPerMin:                 cu.reqPerMin,
+		queueCh:                   queueCh,
+		maxQueueTime:              time.Duration(cu.maxQueueTime),
+		reqPacketSizeTokenLimiter: rate.NewLimiter(rate.Limit(cu.reqPacketSizeTokensRate), int(cu.reqPacketSizeTokensBurst)),
+		reqPacketSizeTokensBurst:  cu.reqPacketSizeTokensBurst,
+		reqPacketSizeTokensRate:   cu.reqPacketSizeTokensRate,
+		allowedNetworks:           cu.allowedNetworks,
 	}
 }
 
