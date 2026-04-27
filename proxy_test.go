@@ -1242,6 +1242,36 @@ func (r *requestRegistry) get(key string) (bool, error) {
 	return v, nil
 }
 
+func BenchmarkCalcQueryParamsHash(b *testing.B) {
+	// Mix of param_* and non-param_ values, mirroring what a real request
+	// looks like — the hash only consumes the param_* subset.
+	cases := []struct {
+		name   string
+		params url.Values
+	}{
+		{"empty", url.Values{}},
+		{"no_params", url.Values{"query_id": {"abc"}, "session_id": {"xyz"}}},
+		{"single_param", url.Values{"param_limit": {"100"}, "session_id": {"xyz"}}},
+		{"five_params", url.Values{
+			"param_limit":  {"100"},
+			"param_table":  {"events"},
+			"param_id":     {"42"},
+			"param_status": {"active"},
+			"param_region": {"us-east-1"},
+			"query_id":     {"abc"},
+			"session_id":   {"xyz"},
+		}},
+	}
+	for _, tc := range cases {
+		b.Run(tc.name, func(b *testing.B) {
+			b.ReportAllocs()
+			for i := 0; i < b.N; i++ {
+				_ = calcQueryParamsHash(tc.params)
+			}
+		})
+	}
+}
+
 func TestCalcQueryParamsHash(t *testing.T) {
 	testCases := []struct {
 		name           string
