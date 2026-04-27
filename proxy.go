@@ -15,6 +15,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/contentsquare/chproxy/cache"
@@ -48,7 +49,7 @@ type reverseProxy struct {
 	maxIdleConns        int
 	maxIdleConnsPerHost int
 	maxErrorReasonSize  int64
-	allowedParams       []string
+	allowedParams       atomic.Pointer[[]string]
 }
 
 func newReverseProxy(cfgCp *config.ConnectionPool) *reverseProxy {
@@ -724,10 +725,11 @@ func (rp *reverseProxy) applyConfig(cfg *config.Config) error {
 	// Substitute old configs with the new configs in rp.
 	// All the currently running requests will continue with old configs,
 	// while all the new requests will use new configs.
+	allowed := resolveAllowedParams(cfg.AllowedParams)
+	rp.allowedParams.Store(&allowed)
 	rp.lock.Lock()
 	rp.clusters = clusters
 	rp.users = users
-	rp.allowedParams = resolveAllowedParams(cfg.AllowedParams)
 	// Swap is needed for deferred closing of old caches.
 	// See the code above where new caches are created.
 	caches, rp.caches = rp.caches, caches
@@ -856,9 +858,10 @@ func (rp *reverseProxy) refreshCacheMetrics() {
 // find user, cluster and clusterUser
 // in case of wildcarded user, cluster user is crafted to use original credentials
 func (rp *reverseProxy) getAllowedParams() []string {
-	rp.lock.RLock()
-	defer rp.lock.RUnlock()
-	return rp.allowedParams
+	if p := rp.allowedParams.Load(); p != nil {
+		return *p
+	}
+	return nil
 }
 
 func (rp *reverseProxy) getUser(name string, password string) (found bool, u *user, c *cluster, cu *clusterUser) {
