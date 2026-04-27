@@ -47,6 +47,7 @@ type reverseProxy struct {
 	maxIdleConns        int
 	maxIdleConnsPerHost int
 	maxErrorReasonSize  int64
+	allowedParams       []string
 }
 
 func newReverseProxy(cfgCp *config.ConnectionPool) *reverseProxy {
@@ -702,12 +703,22 @@ func (rp *reverseProxy) applyConfig(cfg *config.Config) error {
 	rp.lock.Lock()
 	rp.clusters = clusters
 	rp.users = users
+	rp.allowedParams = resolveAllowedParams(cfg.AllowedParams)
 	// Swap is needed for deferred closing of old caches.
 	// See the code above where new caches are created.
 	caches, rp.caches = rp.caches, caches
 	rp.lock.Unlock()
 
 	return nil
+}
+
+// resolveAllowedParams returns the configured allowed-params list when set,
+// otherwise the built-in defaultAllowedParams baseline.
+func resolveAllowedParams(cfg []string) []string {
+	if len(cfg) > 0 {
+		return cfg
+	}
+	return defaultAllowedParams
 }
 
 func initTempCaches(caches map[string]*cache.AsyncCache, transactionsTimeout config.Duration, cfg []config.Cache) error {
@@ -820,6 +831,12 @@ func (rp *reverseProxy) refreshCacheMetrics() {
 
 // find user, cluster and clusterUser
 // in case of wildcarded user, cluster user is crafted to use original credentials
+func (rp *reverseProxy) getAllowedParams() []string {
+	rp.lock.RLock()
+	defer rp.lock.RUnlock()
+	return rp.allowedParams
+}
+
 func (rp *reverseProxy) getUser(name string, password string) (found bool, u *user, c *cluster, cu *clusterUser) {
 	rp.lock.RLock()
 	defer rp.lock.RUnlock()
@@ -917,6 +934,6 @@ func (rp *reverseProxy) getScope(req *http.Request) (*scope, int, error) {
 		return nil, http.StatusForbidden, fmt.Errorf("cluster user %q is not allowed to access", cu.name)
 	}
 
-	s := newScope(req, u, c, cu, sessionId, sessionTimeout)
+	s := newScope(req, u, c, cu, sessionId, sessionTimeout, rp.getAllowedParams())
 	return s, 0, nil
 }

@@ -122,6 +122,17 @@ param_groups:
       - key: "max_execution_time"
         value: "30"
 
+# Optional override of the URL query args chproxy forwards to ClickHouse.
+# When omitted, chproxy uses a built-in safe default list (see scope.go).
+# When set, only the listed params survive — everything else is stripped
+# before the request reaches ClickHouse.
+allowed_params:
+  - query
+  - database
+  - default_format
+  - output_format_json_array_of_rows
+  - max_query_size
+
 # Settings for `chproxy` input interfaces.
 server:
   # Configs for input http interface.

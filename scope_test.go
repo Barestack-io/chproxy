@@ -369,7 +369,8 @@ func TestDecorateRequest(t *testing.T) {
 			user: &user{
 				params: tc.userParams,
 			},
-			host: topology.NewNode(&url.URL{Host: "127.0.0.1"}, nil, "", ""),
+			host:          topology.NewNode(&url.URL{Host: "127.0.0.1"}, nil, "", ""),
+			allowedParams: defaultAllowedParams,
 		}
 		req, _ = s.decorateRequest(req)
 		values := req.URL.Query()
@@ -391,6 +392,73 @@ func TestDecorateRequest(t *testing.T) {
 				t.Fatalf("expected params: %#v; got instead: %#v", tc.expectedParams, params)
 			}
 		}
+	}
+}
+
+// TestDecorateRequestAllowedParamsOverride covers the case where the YAML
+// config supplies its own `allowed_params` list. Params on the configured
+// list survive; params NOT on the list are stripped, even if they are part
+// of the built-in defaultAllowedParams.
+func TestDecorateRequestAllowedParamsOverride(t *testing.T) {
+	testCases := []struct {
+		name           string
+		request        string
+		allowedParams  []string
+		expectedParams []string
+	}{
+		{
+			name:           "custom param survives when listed",
+			request:        "http://127.0.0.1?query=SELECT&output_format_json_array_of_rows=1&max_query_size=10000000",
+			allowedParams:  []string{"query", "output_format_json_array_of_rows", "max_query_size"},
+			expectedParams: []string{"query_id", "session_timeout", "query", "output_format_json_array_of_rows", "max_query_size"},
+		},
+		{
+			name:           "default param is stripped when override omits it",
+			request:        "http://127.0.0.1?query=SELECT&compress=1&database=foo",
+			allowedParams:  []string{"query"},
+			expectedParams: []string{"query_id", "session_timeout", "query"},
+		},
+		{
+			name:           "empty list falls back to defaults",
+			request:        "http://127.0.0.1?query=SELECT&database=foo&output_format_json_array_of_rows=1",
+			allowedParams:  nil,
+			expectedParams: []string{"query_id", "session_timeout", "query", "database"},
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			req, err := http.NewRequest("GET", tc.request, nil)
+			if err != nil {
+				t.Fatalf("unexpected error while creating request: %s", err)
+			}
+			req.Header.Set("Content-Type", "text/plain")
+			s := &scope{
+				id:            newScopeID(),
+				clusterUser:   &clusterUser{},
+				user:          &user{},
+				host:          topology.NewNode(&url.URL{Host: "127.0.0.1"}, nil, "", ""),
+				allowedParams: tc.allowedParams,
+			}
+			req, _ = s.decorateRequest(req)
+			values := req.URL.Query()
+			got := make([]string, 0, len(values))
+			for k := range values {
+				got = append(got, k)
+			}
+
+			sort.Strings(got)
+			want := append([]string(nil), tc.expectedParams...)
+			sort.Strings(want)
+			if len(got) != len(want) {
+				t.Fatalf("param count mismatch: got %#v; want %#v", got, want)
+			}
+			for i := range want {
+				if got[i] != want[i] {
+					t.Fatalf("expected params %#v; got %#v", want, got)
+				}
+			}
+		})
 	}
 }
 
