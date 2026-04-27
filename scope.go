@@ -895,17 +895,16 @@ func (c *cluster) getReplicaSticky(sessionId string) *replica {
 	idx %= n
 	r := c.replicas[idx]
 
-	for i := uint32(1); i < n; i++ {
-		// handling sticky session
-		sessionId := hash(sessionId)
-		tmpIdx := (sessionId) % n
+	sessionHash := hash(sessionId)
+	for i := uint32(0); i < n; i++ {
+		tmpIdx := (sessionHash + i) % n
 		tmpRSticky := c.replicas[tmpIdx]
 		log.Debugf("Sticky replica candidate is: %s", tmpRSticky.name)
 		if !tmpRSticky.isActive() {
 			log.Debugf("Sticky session replica has been picked up, but it is not available")
 			continue
 		}
-		log.Debugf("Sticky session replica is: %s, session_id: %d, replica_idx: %d, max replicas in pool: %d", tmpRSticky.name, sessionId, tmpIdx, n)
+		log.Debugf("Sticky session replica is: %s, session_id: %d, replica_idx: %d, max replicas in pool: %d", tmpRSticky.name, sessionHash, tmpIdx, n)
 		return tmpRSticky
 	}
 	// The returned replica may be inactive. This is OK,
@@ -927,18 +926,16 @@ func (r *replica) getHostSticky(sessionId string) *topology.Node {
 	idx %= n
 	h := r.hosts[idx]
 
-	// Scan all the hosts for the least loaded host.
-	for i := uint32(1); i < n; i++ {
-		// handling sticky session
-		sessionId := hash(sessionId)
-		tmpIdx := (sessionId) % n
+	sessionHash := hash(sessionId)
+	for i := uint32(0); i < n; i++ {
+		tmpIdx := (sessionHash + i) % n
 		tmpHSticky := r.hosts[tmpIdx]
 		log.Debugf("Sticky server candidate is: %s", tmpHSticky)
 		if !tmpHSticky.IsActive() {
 			log.Debugf("Sticky session server has been picked up, but it is not available")
 			continue
 		}
-		log.Debugf("Sticky session server is: %s, session_id: %d, server_idx: %d, max nodes in pool: %d", tmpHSticky, sessionId, tmpIdx, n)
+		log.Debugf("Sticky session server is: %s, session_id: %d, server_idx: %d, max nodes in pool: %d", tmpHSticky, sessionHash, tmpIdx, n)
 		return tmpHSticky
 	}
 

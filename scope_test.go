@@ -498,6 +498,58 @@ func TestDeepCopyClusterUserPreservesQueueCapacity(t *testing.T) {
 	}
 }
 
+// findHost returns the *topology.Node served at the given IP across all
+// replicas of c, or fails the test.
+func findHost(t *testing.T, c *cluster, host string) *topology.Node {
+	t.Helper()
+	for _, r := range c.replicas {
+		for _, h := range r.hosts {
+			if h.Host() == host {
+				return h
+			}
+		}
+	}
+	t.Fatalf("host %q not found in cluster", host)
+	return nil
+}
+
+func TestGetHostStickyFailoverWhenStickyHostInactive(t *testing.T) {
+	// TestGetHostSticky establishes that sessionId "0" sticks to 127.0.0.22
+	// (replica1, host index 1) when every host is up. If that host goes
+	// inactive, sticky should fall over to the only other host in replica1
+	// (127.0.0.11) — and never return an inactive node.
+	c := testGetCluster()
+	stickyHost := findHost(t, c, "127.0.0.22")
+	stickyHost.SetIsActive(false)
+
+	for i := 0; i < 100; i++ {
+		got := c.getHostSticky("0")
+		if !got.IsActive() {
+			t.Fatalf("iter %d: getHostSticky returned inactive host %s", i, got.Host())
+		}
+		if got.Host() != "127.0.0.11" {
+			t.Fatalf("iter %d: failover non-deterministic: got %s, want 127.0.0.11", i, got.Host())
+		}
+	}
+}
+
+func TestGetReplicaStickyFailoverWhenStickyReplicaInactive(t *testing.T) {
+	// sessionId "0" sticks to replica1 when every replica is active. Bring
+	// replica1 down (all of its hosts inactive) and the sticky pick must
+	// fall over to a still-active replica.
+	c := testGetCluster()
+	for _, h := range c.replicas[0].hosts {
+		h.SetIsActive(false)
+	}
+
+	for i := 0; i < 100; i++ {
+		got := c.getReplicaSticky("0")
+		if !got.isActive() {
+			t.Fatalf("iter %d: getReplicaSticky returned inactive replica %s", i, got.name)
+		}
+	}
+}
+
 func TestIncQueued(t *testing.T) {
 	u := testGetUser()
 	cu := testGetClusterUser()
