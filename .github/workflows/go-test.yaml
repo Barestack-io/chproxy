@@ -12,10 +12,10 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-    - uses: ContentSquare/actions-checkout@approved-v4
+    - uses: actions/checkout@v4
 
     - name: Set up Go
-      uses: ContentSquare/actions-setup-go@approved-v5
+      uses: actions/setup-go@v5
       with:
         go-version-file: go.mod
 
@@ -24,11 +24,3 @@ jobs:
 
     - name: Test
       run: go test -v ./...
-
-    - name: Update coverage report
-      if: github.ref == 'refs/heads/master'
-      uses: ContentSquare/ncruces-go-coverage-report@approved-21fa4b59396f242b81896a3cd212a463589b6742
-      with:
-        report: 'false'
-        chart: 'true'
-        amend: 'false'
