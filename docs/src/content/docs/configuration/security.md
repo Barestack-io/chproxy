@@ -4,9 +4,13 @@ sidebar:
     order: 4
 ---
 
-`Chproxy` removes all the query params from input requests (except the user's [params](https://github.com/ContentSquare/chproxy/blob/master/config#param_groups_config) and listed [here](https://github.com/ContentSquare/chproxy/blob/master/scope.go#L360))
+`Chproxy` removes all the query params from input requests (except the user's [params](https://github.com/ContentSquare/chproxy/blob/master/config#param_groups_config) and the built-in safe list defined as `defaultAllowedParams` in [scope.go](https://github.com/ContentSquare/chproxy/blob/master/scope.go))
 before proxying them to `ClickHouse` nodes. This prevents from unsafe overriding
 of various `ClickHouse` [settings](https://clickhouse.com/docs/en/interfaces/http/).
+
+The built-in list can be replaced with the top-level `allowed_params` option in
+the YAML config. When set, only the listed params survive — overriding the
+default list entirely, so include any built-in entries you still need.
 
 Be careful when configuring limits, allowed networks, passwords etc.
 By default `chproxy` tries detecting the most obvious configuration errors such as `allowed_networks: ["0.0.0.0/0"]` or sending passwords via unencrypted HTTP.

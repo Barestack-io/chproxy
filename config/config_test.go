@@ -271,7 +271,14 @@ var fullConfig = Config{
 		},
 	},
 	MaxErrorReasonSize: ByteSize(100 << 20),
-	networkReg:         map[string]Networks{},
+	AllowedParams: []string{
+		"query",
+		"database",
+		"default_format",
+		"output_format_json_array_of_rows",
+		"max_query_size",
+	},
+	networkReg: map[string]Networks{},
 }
 
 func TestLoadConfig(t *testing.T) {

@@ -28,6 +28,11 @@ caches:
 param_groups:
   - <param_groups_config> ...
 
+# Optional list of URL query args that chproxy forwards to ClickHouse.
+# When omitted, chproxy uses a built-in safe default list (see scope.go).
+# When set, only the listed params survive; everything else is stripped.
+allowed_params: <list of string> [optional]
+
 # Named network lists
 network_groups: <network_groups_config> ... [optional]
 
