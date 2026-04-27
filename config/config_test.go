@@ -950,6 +950,12 @@ param_groups:
     value: "30"
   - key: max_execution_time
     value: "30"
+allowed_params:
+- query
+- database
+- default_format
+- output_format_json_array_of_rows
+- max_query_size
 connection_pool:
   max_idle_conns: 100
   max_idle_conns_per_host: 2
