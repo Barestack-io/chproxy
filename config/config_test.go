@@ -983,3 +983,55 @@ func TestConfigReplaceEnvVars(t *testing.T) {
 		})
 	}
 }
+
+func TestAllowedParamsYAML(t *testing.T) {
+	// Config.UnmarshalYAML enforces a minimum-valid config (users + clusters),
+	// so each test case is built on a minimal scaffold and only varies the
+	// allowed_params block.
+	const scaffold = `
+server:
+  http:
+    listen_addr: ":8080"
+    allowed_networks: ["127.0.0.1"]
+clusters:
+  - name: cluster
+    nodes: ["127.0.0.1:8123"]
+users:
+  - name: default
+    to_cluster: cluster
+    to_user: default
+`
+	testCases := []struct {
+		name      string
+		extraYAML string
+		want      []string
+	}{
+		{
+			name:      "field absent leaves nil",
+			extraYAML: "",
+			want:      nil,
+		},
+		{
+			name:      "field empty stays empty",
+			extraYAML: "allowed_params: []\n",
+			want:      []string{},
+		},
+		{
+			name:      "values parse in order",
+			extraYAML: "allowed_params:\n  - query\n  - output_format_json_array_of_rows\n  - max_query_size\n",
+			want:      []string{"query", "output_format_json_array_of_rows", "max_query_size"},
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			var c Config
+			if err := yaml.Unmarshal([]byte(scaffold+tc.extraYAML), &c); err != nil {
+				t.Fatalf("yaml.Unmarshal: %s", err)
+			}
+			if !cmp.Equal(c.AllowedParams, tc.want, cmpopts.EquateEmpty()) {
+				t.Fatalf("AllowedParams: got %#v; want %#v", c.AllowedParams, tc.want)
+			}
+		})
+	}
+}

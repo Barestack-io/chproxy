@@ -78,6 +78,11 @@ type Config struct {
 
 	ParamGroups []ParamGroup `yaml:"param_groups,omitempty"`
 
+	// AllowedParams overrides the built-in list of URL query args that
+	// chproxy forwards to ClickHouse. When omitted or empty, the built-in
+	// defaultAllowedParams list is used (see scope.go).
+	AllowedParams []string `yaml:"allowed_params,omitempty"`
+
 	ConnectionPool ConnectionPool `yaml:"connection_pool,omitempty"`
 
 	// Allow to proxy ping requests

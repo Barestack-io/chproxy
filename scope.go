@@ -55,9 +55,14 @@ type scope struct {
 	labels prometheus.Labels
 
 	requestPacketSize int
+
+	// allowedParams is the list of URL query args this scope's request will
+	// forward to ClickHouse. Resolved from cfg.AllowedParams in applyConfig
+	// and falls back to defaultAllowedParams when the YAML omits the field.
+	allowedParams []string
 }
 
-func newScope(req *http.Request, u *user, c *cluster, cu *clusterUser, sessionId string, sessionTimeout int) *scope {
+func newScope(req *http.Request, u *user, c *cluster, cu *clusterUser, sessionId string, sessionTimeout int, allowedParams []string) *scope {
 	h := c.getHost()
 	if sessionId != "" {
 		h = c.getHostSticky(sessionId)
@@ -88,6 +93,7 @@ func newScope(req *http.Request, u *user, c *cluster, cu *clusterUser, sessionId
 		},
 
 		requestPacketSize: max(0, int(req.ContentLength)),
+		allowedParams:     allowedParams,
 	}
 	return s
 }
@@ -354,12 +360,13 @@ func (s *scope) killQuery() error {
 	return nil
 }
 
-// allowedParams contains query args allowed to be proxied.
+// defaultAllowedParams contains query args allowed to be proxied when the
+// YAML config does not override the list via `allowed_params`.
 // See https://clickhouse.com/docs/en/operations/settings/
 //
-// All the other params passed via query args are stripped before
-// proxying the request. This is for the sake of security.
-var allowedParams = []string{
+// All other params passed via query args are stripped before proxying the
+// request, for the sake of security.
+var defaultAllowedParams = []string{
 	"query",
 	"database",
 	"default_format",
@@ -407,8 +414,12 @@ func (s *scope) decorateRequest(req *http.Request) (*http.Request, url.Values) {
 	}
 
 	// Keep allowed params.
+	allowed := s.allowedParams
+	if len(allowed) == 0 {
+		allowed = defaultAllowedParams
+	}
 	origParams := req.URL.Query()
-	for _, param := range allowedParams {
+	for _, param := range allowed {
 		val := origParams.Get(param)
 		if len(val) > 0 {
 			params.Set(param, val)
