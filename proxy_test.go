@@ -268,6 +268,27 @@ func TestApplyConfig(t *testing.T) {
 	}
 }
 
+func BenchmarkGetAllowedParams(b *testing.B) {
+	proxy, err := newConfiguredProxy(goodCfg)
+	if err != nil {
+		b.Fatalf("unexpected error: %s", err)
+	}
+	b.Run("serial", func(b *testing.B) {
+		b.ReportAllocs()
+		for i := 0; i < b.N; i++ {
+			_ = proxy.getAllowedParams()
+		}
+	})
+	b.Run("parallel", func(b *testing.B) {
+		b.ReportAllocs()
+		b.RunParallel(func(pb *testing.PB) {
+			for pb.Next() {
+				_ = proxy.getAllowedParams()
+			}
+		})
+	})
+}
+
 var authCfg = &config.Config{
 	Clusters: []config.Cluster{
 		{
